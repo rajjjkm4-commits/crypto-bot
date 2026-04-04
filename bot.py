@@ -1,8 +1,8 @@
 import logging
 import sqlite3
 import os
-import threading
 import asyncio
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -10,8 +10,6 @@ from telegram.ext import (
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-# ─────────────────────────────────────────────
-# ✅ CONFIG
 # ─────────────────────────────────────────────
 BOT_TOKEN          = "8598800608:AAHllMFYXsfyv5rTPaFtA7JcIJHv6P8dPVA"
 ADMIN_CHAT_ID      = 1256115118
@@ -111,7 +109,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("💰 Mudrex",   callback_data="app_Mudrex")],
         [InlineKeyboardButton("🏦 Vantage",  callback_data="app_Vantage")],
     ]
-
     await update.message.reply_text(
         f"👋 Welcome, {user.first_name}!\n\n"
         "To join our *exclusive private group*, complete one simple task:\n\n"
@@ -126,11 +123,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def app_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query    = update.callback_query
     await query.answer()
-
     app_name = query.data.replace("app_", "")
     context.user_data["chosen_app"] = app_name
     link     = REFERRAL_LINKS[app_name]
-
     await query.edit_message_text(
         f"Great choice! 🎉\n\n"
         f"*Step 1 —* Register on *{app_name}* using my referral link:\n"
@@ -147,14 +142,12 @@ async def proof_submitted(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user       = update.effective_user
     proof      = update.message.text
     chosen_app = context.user_data.get("chosen_app", "Unknown")
-
     save_user(user.id, user.username, user.full_name, chosen_app, proof)
 
     keyboard = [[
         InlineKeyboardButton("✅ Approve", callback_data=f"approve_{user.id}"),
         InlineKeyboardButton("❌ Reject",  callback_data=f"reject_{user.id}"),
     ]]
-
     await context.bot.send_message(
         chat_id=ADMIN_CHAT_ID,
         text=(
@@ -169,7 +162,6 @@ async def proof_submitted(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
-
     await update.message.reply_text(
         "✅ *Proof submitted successfully!*\n\n"
         "The admin will review and approve you within 24 hours.\n"
@@ -181,11 +173,9 @@ async def proof_submitted(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-
     if query.from_user.id != ADMIN_CHAT_ID:
         await query.answer("⛔ Not authorized!", show_alert=True)
         return
-
     await query.answer()
     action, uid = query.data.split("_", 1)
     user_id = int(uid)
@@ -240,17 +230,15 @@ async def pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
-# ── Main ──────────────────────────────────────
+# ── Main (async) ──────────────────────────────
 
-def main():
+async def main():
     init_db()
 
     # Start health server in background thread
-    t = threading.Thread(target=run_health_server, daemon=True)
-    t.start()
+    threading.Thread(target=run_health_server, daemon=True).start()
     print("✅ Health server started...")
 
-    # Build bot app
     app = Application.builder().token(BOT_TOKEN).build()
 
     conv = ConversationHandler(
@@ -267,8 +255,14 @@ def main():
     app.add_handler(CommandHandler("pending", pending))
 
     print("✅ @Livedatacryptobot is running...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    async with app:
+        await app.start()
+        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+        await asyncio.Event().wait()  # Run forever
+        await app.updater.stop()
+        await app.stop()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
