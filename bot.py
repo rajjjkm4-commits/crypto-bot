@@ -1,10 +1,27 @@
 import logging
 import sqlite3
+import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ContextTypes, ConversationHandler
 )
+
+# ── Health check server for Render ────────────
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running!")
+    def log_message(self, format, *args):
+        pass
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    server.serve_forever()
 
 # ─────────────────────────────────────────────
 # ✏️  CONFIGURE THESE BEFORE RUNNING
@@ -226,6 +243,10 @@ async def pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     init_db()
+
+    # Start health check server in background (required for Render)
+    threading.Thread(target=run_health_server, daemon=True).start()
+    print("✅ Health server started...")
     app = Application.builder().token(BOT_TOKEN).build()
 
     conv = ConversationHandler(
