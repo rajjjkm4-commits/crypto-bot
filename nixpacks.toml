@@ -1,1 +1,6 @@
-cmd = "python3 bot.py"
+
+[phases.setup]
+nixPkgs = ["python3", "pip"]
+
+[start]
+cmd = "pip install -r requirements.txt && python3 bot.py"
